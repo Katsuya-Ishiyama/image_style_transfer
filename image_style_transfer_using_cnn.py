@@ -404,16 +404,39 @@ def whiten_ndarray_image(x):
     return whitened.reshape(x.shape)
 # whiten_ndarray_image }}}
 
+# {{{ def preprocess(image, offset):
+def preprocess(image, offset):
+    return image - offset
+# preprocess }}}
+
+# def unprocess(image, offset): {{{
+def unprocess(image, offset):
+    return image + offset
+# unprocess }}}
+
+# {{{ def calculate_mean_pixel(content, style):
+def calculate_mean_pixel(content, style):
+    all_elements = np.append(content, style)
+    return np.floor(np.mean(all_elements))
+# calculate_mean_pixel }}}
+
 
 if (__name__ == '__main__'):
+
+    # ---------------------------------------------------------
+    # Reading content image and style image.
+    # ---------------------------------------------------------
+
+    content_src = read_images_as_jpeg(CONTENT_FILE)
+    style_src = read_images_as_jpeg(STYLE_FILE)
+    mean_pixel = calculate_mean_pixel(content_src, style_src)
+    content_data = preprocess(content_src, mean_pixel)
+    style_data = preprocess(style_src, mean_pixel)
 
     # ---------------------------------------------------------
     # Extracting feature maps from the content image.
     # ---------------------------------------------------------
 
-    tmp = read_images_as_jpeg(CONTENT_FILE)
-    content_data = whiten_ndarray_image(tmp)
-    # content_data = read_images_as_jpeg(CONTENT_FILE)
     content_image = tf.placeholder(np.float32, content_data.shape)
     content_feature_model = construct_layer_of_extracting_content_feature(
         content=content_image
@@ -427,9 +450,6 @@ if (__name__ == '__main__'):
     # Extracting feature maps from the style image.
     # ---------------------------------------------------------
 
-    tmp = read_images_as_jpeg(STYLE_FILE)
-    style_data = whiten_ndarray_image(tmp)
-    # style_data = read_images_as_jpeg(STYLE_FILE)
     style_image = tf.placeholder(np.float32, style_data.shape)
     style_feature_model = construct_layer_of_extracting_style_feature(
         style=style_image
@@ -445,33 +465,32 @@ if (__name__ == '__main__'):
     batch, height, width, channel = content_data.shape
 
     # Not Whitening.
-    # synthesized_image = tf.Variable(
-    #     tf.random_normal([batch, height, width, channel],
-    #                      mean=125,
-    #                      stddev=30),
-    #     trainable=True
-    # )
-    # synthesized_content_feature = construct_layer_of_extracting_content_feature(
-    #     content=synthesized_image
-    # )
-    # synthesized_style_feature = construct_layer_of_extracting_style_feature(
-    #     style=synthesized_image
-    # )
-
-    # Whitening.
     synthesized_image = tf.Variable(
-        tf.random_normal([height, width, channel]),
+        tf.random_normal([batch, height, width, channel],
+                         stddev=0.1 * np.std(content_data)),
         trainable=True
     )
-    whitened_image_3d = tf.image.per_image_standardization(synthesized_image)
-    whitened_image_4d = tf.reshape(whitened_image_3d,
-                                   shape=[batch, height, width, channel])
     synthesized_content_feature = construct_layer_of_extracting_content_feature(
-        content=whitened_image_4d
+        content=synthesized_image
     )
     synthesized_style_feature = construct_layer_of_extracting_style_feature(
-        style=whitened_image_4d
+        style=synthesized_image
     )
+
+    # Whitening.
+    # synthesized_image = tf.Variable(
+    #     tf.random_normal([height, width, channel]),
+    #     trainable=True
+    # )
+    # whitened_image_3d = tf.image.per_image_standardization(synthesized_image)
+    # whitened_image_4d = tf.reshape(whitened_image_3d,
+    #                                shape=[batch, height, width, channel])
+    # synthesized_content_feature = construct_layer_of_extracting_content_feature(
+    #     content=whitened_image_4d
+    # )
+    # synthesized_style_feature = construct_layer_of_extracting_style_feature(
+    #     style=whitened_image_4d
+    # )
 
     # ---------------------------------------------------------
     # Constructing loss function of contents.
